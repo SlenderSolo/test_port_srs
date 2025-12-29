@@ -43,8 +43,7 @@ func processFiles(inputDir string, outputDir string, isDomain bool) {
 			continue
 		}
 
-		// Создаем строго типизированную структуру опций
-		// Вместо map используем конкретный struct из библиотеки
+		// Создаем структуру опций
 		ruleOptions := option.DefaultHeadlessRule{}
 		
 		if isDomain {
@@ -57,7 +56,7 @@ func processFiles(inputDir string, outputDir string, isDomain bool) {
 		plainRuleSet := option.PlainRuleSet{
 			Rules: []option.HeadlessRule{
 				{
-					Type:           "default", // Используем строку вместо константы
+					Type:           "default",
 					DefaultOptions: ruleOptions,
 				},
 			},
@@ -70,11 +69,13 @@ func processFiles(inputDir string, outputDir string, isDomain bool) {
 			fmt.Printf("Error creating file %s: %v\n", outputPath, err)
 			os.Exit(1)
 		}
-
-		// Компилируем и записываем
-		// Третий аргумент false - это параметр upgrade (нам он не нужен для новых файлов)
-		err = srs.Write(f, plainRuleSet, false)
-		f.Close() 
+		
+		// !!! ИСПРАВЛЕНИЕ ЗДЕСЬ !!!
+		// Вместо 'false' передаем '2' (srs.Version2).
+		// 1 = совместимость с v1.8+
+		// 2 = совместимость с v1.10+ (оптимизированный)
+		err = srs.Write(f, plainRuleSet, 2)
+		f.Close()
 
 		if err != nil {
 			fmt.Printf("Error compiling %s: %v\n", ruleName, err)
