@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -31,13 +30,14 @@ func main() {
 func processFiles(inputDir string, outputDir string, isDomain bool) {
 	files, err := filepath.Glob(filepath.Join(inputDir, "*.lst"))
 	if err != nil {
-		panic(err)
+		fmt.Println("Error reading glob:", err)
+		return
 	}
 
 	for _, file := range files {
 		fileName := filepath.Base(file)
 		ruleName := strings.TrimSuffix(fileName, filepath.Ext(fileName))
-		
+
 		fmt.Printf("Processing: %s -> %s.srs\n", fileName, ruleName)
 
 		lines := readLines(file)
@@ -45,24 +45,36 @@ func processFiles(inputDir string, outputDir string, isDomain bool) {
 			continue
 		}
 
-		// Создаем структуру правила
-		headlessRule := option.HeadlessRule{
-			Type:           option.HeadlessRuleTypeDefault,
-			DefaultOptions: option.HeadlessRuleDefaultOptions{},
-		}
-
-		// Заполняем либо домены, либо IP
+		// Создаем опции правила через карту (map), чтобы избежать ошибок типов
+		ruleOptions := make(map[string]any)
 		if isDomain {
-			// Для доменов используем domain_suffix
-			headlessRule.DefaultOptions.DomainSuffix = lines
+			ruleOptions["domain_suffix"] = lines
 		} else {
-			// Для IP используем ip_cidr
-			headlessRule.DefaultOptions.IPCIDR = lines
+			ruleOptions["ip_cidr"] = lines
 		}
 
-		// Компиляция в srs
+		// Создаем структуру PlainRuleSet (требуется для srs.Write)
+		plainRuleSet := option.PlainRuleSet{
+			Rules: []option.HeadlessRule{
+				{
+					Type:           option.RuleTypeDefault,
+					DefaultOptions: ruleOptions,
+				},
+			},
+		}
+
+		// Открываем файл для записи
 		outputPath := filepath.Join(outputDir, ruleName+".srs")
-		err := srs.Write(context.Background(), outputPath, headlessRule)
+		f, err := os.Create(outputPath)
+		if err != nil {
+			fmt.Printf("Error creating file %s: %v\n", outputPath, err)
+			os.Exit(1)
+		}
+		
+		// Компилируем и записываем
+		err = srs.Write(f, plainRuleSet)
+		f.Close() // Закрываем файл сразу после записи
+
 		if err != nil {
 			fmt.Printf("Error compiling %s: %v\n", ruleName, err)
 			os.Exit(1)
