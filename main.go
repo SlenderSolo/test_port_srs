@@ -17,12 +17,10 @@ func main() {
 	os.MkdirAll("sing-geoip", 0755)
 
 	// 1. Обработка Доменов (Geosite)
-	// Источник: allow-domains/Services/*.lst
 	fmt.Println("--- Processing Domains ---")
 	processFiles("allow-domains/Services", "sing-geosite", true)
 
 	// 2. Обработка IP (Geoip)
-	// Источник: allow-domains/Subnets/IPv4/*.lst
 	fmt.Println("\n--- Processing IPs ---")
 	processFiles("allow-domains/Subnets/IPv4", "sing-geoip", false)
 }
@@ -45,19 +43,21 @@ func processFiles(inputDir string, outputDir string, isDomain bool) {
 			continue
 		}
 
-		// Создаем опции правила через карту (map), чтобы избежать ошибок типов
-		ruleOptions := make(map[string]any)
+		// Создаем строго типизированную структуру опций
+		// Вместо map используем конкретный struct из библиотеки
+		ruleOptions := option.DefaultHeadlessRule{}
+		
 		if isDomain {
-			ruleOptions["domain_suffix"] = lines
+			ruleOptions.DomainSuffix = lines
 		} else {
-			ruleOptions["ip_cidr"] = lines
+			ruleOptions.IPCIDR = lines
 		}
 
-		// Создаем структуру PlainRuleSet (требуется для srs.Write)
+		// Создаем структуру правила
 		plainRuleSet := option.PlainRuleSet{
 			Rules: []option.HeadlessRule{
 				{
-					Type:           option.RuleTypeDefault,
+					Type:           "default", // Используем строку вместо константы
 					DefaultOptions: ruleOptions,
 				},
 			},
@@ -70,10 +70,11 @@ func processFiles(inputDir string, outputDir string, isDomain bool) {
 			fmt.Printf("Error creating file %s: %v\n", outputPath, err)
 			os.Exit(1)
 		}
-		
+
 		// Компилируем и записываем
-		err = srs.Write(f, plainRuleSet)
-		f.Close() // Закрываем файл сразу после записи
+		// Третий аргумент false - это параметр upgrade (нам он не нужен для новых файлов)
+		err = srs.Write(f, plainRuleSet, false)
+		f.Close() 
 
 		if err != nil {
 			fmt.Printf("Error compiling %s: %v\n", ruleName, err)
@@ -82,7 +83,6 @@ func processFiles(inputDir string, outputDir string, isDomain bool) {
 	}
 }
 
-// Функция чтения файла построчно с очисткой
 func readLines(path string) []string {
 	file, err := os.Open(path)
 	if err != nil {
@@ -94,7 +94,6 @@ func readLines(path string) []string {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		// Пропускаем пустые строки и комментарии
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
