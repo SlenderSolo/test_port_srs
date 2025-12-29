@@ -1,0 +1,61 @@
+name: Update Rules
+
+on:
+  workflow_dispatch: # Возможность запустить вручную
+  schedule:
+    - cron: "0 3 * * *" # Запуск каждый день в 3 утра UTC
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Разрешение на запись в репозиторий
+
+    steps:
+      - name: Checkout own repo
+        uses: actions/checkout@v4
+
+      - name: Checkout allow-domains repo
+        uses: actions/checkout@v4
+        with:
+          repository: itdoginfo/allow-domains
+          path: allow-domains
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Download dependencies
+        run: |
+          go mod tidy
+          go mod download
+
+      - name: Run Converter
+        run: go run main.go
+
+      - name: Deploy Geosite (Domains)
+        run: |
+          # Логика публикации Geosite
+          cd sing-geosite
+          git init
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git remote add origin "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          git checkout -b rule-set-geosite
+          git add .
+          git commit -m "Update geosite rule-set $(date +%Y-%m-%d)" || exit 0
+          git push -f origin rule-set-geosite
+
+      - name: Deploy Geoip (IPs)
+        run: |
+          # Логика публикации Geoip
+          cd sing-geoip
+          git init
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git remote add origin "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          git checkout -b rule-set-geoip
+          git add .
+          git commit -m "Update geoip rule-set $(date +%Y-%m-%d)" || exit 0
+          git push -f origin rule-set-geoip
